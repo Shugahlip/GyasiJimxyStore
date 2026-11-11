@@ -61,11 +61,20 @@ jobs:
             --no-daemon \
             assembleDebug
 
-      - name: Verify APK
+        - name: Inspect APK
         run: |
           APK="GyasiJimxyStore/app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK"
-          file "$APK"
+
+          echo "APK CONTENTS:"
+          unzip -l "$APK"
+
+          echo "CHECK DEX FILE:"
+          unzip -l "$APK" | grep classes.dex
+
+          echo "CHECK APK SIGNATURE:"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+
+          echo "APK SIZE:"
           ls -lh "$APK"
 
       - name: Upload APK
