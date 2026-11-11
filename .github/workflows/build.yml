@@ -3,13 +3,21 @@ name: Build Gyasi Jimxy Store APK
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build.yml'
+      - 'GyasiJimxyStore-AndroidStudio-Project.zip'
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout project
+      - name: Download project from repository
         uses: actions/checkout@v4
 
       - name: Set up Java 17
@@ -18,29 +26,49 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-            - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: ''
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          SDKMANAGER=$(find "$SDK/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "Android SDK manager not found"
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses || true
+          "$SDKMANAGER" --sdk_root="$SDK" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
-      - name: Set up Gradle 8.9
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: '8.9'
+      - name: Install Gradle 8.9
+        run: |
+          curl -fsSL \
+            https://services.gradle.org/distributions/gradle-8.9-bin.zip \
+            -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          echo "/tmp/gradle-8.9/bin" >> "$GITHUB_PATH"
 
       - name: Extract Android project
-        run: unzip -o GyasiJimxyStore-AndroidStudio-Project.zip
+        run: |
+          unzip -o GyasiJimxyStore-AndroidStudio-Project.zip
+          test -f GyasiJimxyStore/settings.gradle
+          test -f GyasiJimxyStore/app/build.gradle
 
-      - name: Build Android APK
-        run: gradle -p GyasiJimxyStore assembleDebug
+      - name: Build APK
+        run: |
+          gradle -p GyasiJimxyStore \
+            --no-daemon \
+            assembleDebug
 
-      - name: Verify APK exists
+      - name: Verify APK
         run: |
           APK="GyasiJimxyStore/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
+          file "$APK"
           ls -lh "$APK"
 
-      - name: Upload installable APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Gyasi-Jimxy-Store-APK
